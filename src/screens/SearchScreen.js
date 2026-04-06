@@ -1,30 +1,33 @@
 import { useDeferredValue, useMemo, useState } from 'react';
+import MiniSearch from 'minisearch';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
-import SEARCH_INDEX from '../searchIndex.generated';
+import { MINI_SEARCH_INDEX } from '../searchIndex.generated';
 import { normalizeSearchText } from '../searchUtils';
 
-function scoreEntry(entry, normalizedQuery, terms) {
-  const title = normalizeSearchText(entry.title);
-  let score = 0;
-
-  if (title.includes(normalizedQuery)) score += 80;
-  if (entry.searchText.includes(normalizedQuery)) score += 20;
-
-  for (const term of terms) {
-    if (title.startsWith(term)) score += 20;
-    else if (title.includes(term)) score += 12;
-    else if (entry.searchText.includes(term)) score += 4;
-    else return -1;
-  }
-
-  return score;
-}
+const MINI_SEARCH_OPTIONS = {
+  fields: ['title', 'text'],
+  storeFields: [
+    'kind',
+    'file',
+    'baseFile',
+    'mishnaFile',
+    'beurFile',
+    'anchor',
+    'label',
+    'title',
+    'preview',
+  ],
+};
 
 export default function SearchScreen({ navigation }) {
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
+  const miniSearch = useMemo(
+    () => MiniSearch.loadJS(MINI_SEARCH_INDEX, MINI_SEARCH_OPTIONS),
+    []
+  );
 
   const results = useMemo(() => {
     const normalizedQuery = normalizeSearchText(deferredQuery);
@@ -32,18 +35,13 @@ export default function SearchScreen({ navigation }) {
       return [];
     }
 
-    const terms = normalizedQuery.split(' ').filter(Boolean);
-
-    return SEARCH_INDEX
-      .map(entry => ({
-        entry,
-        score: scoreEntry(entry, normalizedQuery, terms),
-      }))
-      .filter(item => item.score >= 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 100)
-      .map(item => item.entry);
-  }, [deferredQuery]);
+    return miniSearch.search(normalizedQuery, {
+      boost: { title: 3 },
+      combineWith: 'AND',
+      prefix: term => term.length >= 3,
+      fuzzy: term => (term.length >= 4 ? 0.2 : false),
+    }).slice(0, 100);
+  }, [deferredQuery, miniSearch]);
 
   function openResult(entry) {
     const params = {

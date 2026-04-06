@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import MiniSearch from 'minisearch';
 
 const projectRoot = process.cwd();
 const assetsDir = path.join(projectRoot, 'assets');
@@ -112,7 +113,7 @@ function previewText(text, max = 220) {
 }
 
 async function buildIndex() {
-  const entries = [];
+  const documents = [];
   const files = (await fs.readdir(assetsDir))
     .filter(file => file.endsWith('.html'))
     .sort();
@@ -143,7 +144,7 @@ async function buildIndex() {
 
       if (!normalized) continue;
 
-      entries.push({
+      documents.push({
         id: `${file}:${section.anchor || index}`,
         kind,
         file,
@@ -154,14 +155,36 @@ async function buildIndex() {
         label: labelForKind(kind),
         title: section.title,
         preview: previewText(plain),
-        searchText: normalized,
+        text: normalized,
       });
     }
   }
 
-  const output = `export default ${JSON.stringify(entries)};\n`;
+  const miniSearch = new MiniSearch({
+    fields: ['title', 'text'],
+    storeFields: [
+      'kind',
+      'file',
+      'baseFile',
+      'mishnaFile',
+      'beurFile',
+      'anchor',
+      'label',
+      'title',
+      'preview',
+    ],
+  });
+
+  miniSearch.addAll(documents);
+
+  const output = [
+    `export const MINI_SEARCH_INDEX = ${JSON.stringify(miniSearch.toJSON())};`,
+    `export const SEARCH_DOCUMENT_COUNT = ${documents.length};`,
+    '',
+  ].join('\n');
+
   await fs.writeFile(outputFile, output);
-  console.log(`Wrote ${entries.length} search entries to ${path.relative(projectRoot, outputFile)}`);
+  console.log(`Wrote ${documents.length} search entries to ${path.relative(projectRoot, outputFile)}`);
 }
 
 buildIndex().catch(error => {
