@@ -165,7 +165,10 @@ export default function ReaderScreen({ route }) {
   } = route.params;
 
   const topWebViewRef = useRef(null);
-  const bottomWebViewRef = useRef(null);
+  const bottomWebViewRefs = useRef({
+    mishna: null,
+    beur: null,
+  });
   const scrollYRef = useRef(route.params.scrollY ?? 0);
   const scrollRatioRef = useRef(route.params.scrollRatio ?? 0);
   const historySnippetRef = useRef(route.params.historySnippet ?? route.params.simanTitle);
@@ -175,15 +178,32 @@ export default function ReaderScreen({ route }) {
 
   const [bottomTab, setBottomTab] = useState(route.params.bottomTab ?? 'mishna');
   const [fontSize, setFontSize] = useState(DEFAULT_FONT);
-  const [bottomTarget, setBottomTarget] = useState({
-    file: route.params.bottomFile ?? mishnaFile,
-    anchor: route.params.bottomAnchor ?? '',
+  const [bottomTargets, setBottomTargets] = useState({
+    mishna: {
+      file:
+        route.params.bottomTab === 'mishna' && route.params.bottomFile
+          ? route.params.bottomFile
+          : mishnaFile,
+      anchor:
+        route.params.bottomTab === 'mishna' ? (route.params.bottomAnchor ?? '') : '',
+    },
+    beur: {
+      file:
+        route.params.bottomTab === 'beur' && route.params.bottomFile
+          ? route.params.bottomFile
+          : beurFile,
+      anchor:
+        route.params.bottomTab === 'beur' ? (route.params.bottomAnchor ?? '') : '',
+    },
   });
 
   const topUri = useMemo(() => buildAssetUri(file, anchor), [file, anchor]);
-  const bottomUri = useMemo(
-    () => buildAssetUri(bottomTarget.file, bottomTarget.anchor),
-    [bottomTarget]
+  const bottomUris = useMemo(
+    () => ({
+      mishna: buildAssetUri(bottomTargets.mishna.file, bottomTargets.mishna.anchor),
+      beur: buildAssetUri(bottomTargets.beur.file, bottomTargets.beur.anchor),
+    }),
+    [bottomTargets]
   );
 
   useEffect(() => {
@@ -204,9 +224,23 @@ export default function ReaderScreen({ route }) {
     restoreScrollPendingRef.current = (route.params.scrollY ?? 0) > 0;
     lastSavedScrollYRef.current = route.params.scrollY ?? 0;
     setBottomTab(route.params.bottomTab ?? 'mishna');
-    setBottomTarget({
-      file: route.params.bottomFile ?? mishnaFile,
-      anchor: route.params.bottomAnchor ?? '',
+    setBottomTargets({
+      mishna: {
+        file:
+          route.params.bottomTab === 'mishna' && route.params.bottomFile
+            ? route.params.bottomFile
+            : mishnaFile,
+        anchor:
+          route.params.bottomTab === 'mishna' ? (route.params.bottomAnchor ?? '') : '',
+      },
+      beur: {
+        file:
+          route.params.bottomTab === 'beur' && route.params.bottomFile
+            ? route.params.bottomFile
+            : beurFile,
+        anchor:
+          route.params.bottomTab === 'beur' ? (route.params.bottomAnchor ?? '') : '',
+      },
     });
 
     return () => {
@@ -252,16 +286,9 @@ export default function ReaderScreen({ route }) {
     const bottomInjection = buildScaleInjection(fontSize, 0.8);
 
     topWebViewRef.current?.injectJavaScript(topInjection);
-    bottomWebViewRef.current?.injectJavaScript(bottomInjection);
+    bottomWebViewRefs.current.mishna?.injectJavaScript(bottomInjection);
+    bottomWebViewRefs.current.beur?.injectJavaScript(bottomInjection);
   }, [fontSize]);
-
-  useEffect(() => {
-    const nextFile = bottomTab === 'mishna' ? mishnaFile : beurFile;
-    setBottomTarget(current => {
-      if (current.file === nextFile) return current;
-      return { file: nextFile, anchor: '' };
-    });
-  }, [bottomTab, mishnaFile, beurFile]);
 
   async function changeFont(delta) {
     const next = Math.max(MIN_FONT, Math.min(MAX_FONT, fontSize + delta));
@@ -272,10 +299,13 @@ export default function ReaderScreen({ route }) {
   function openCommentaryLink(href) {
     const target = parseCommentaryTarget(href, route.params);
     setBottomTab(target.tab);
-    setBottomTarget({
-      file: target.file,
-      anchor: target.anchor,
-    });
+    setBottomTargets(current => ({
+      ...current,
+      [target.tab]: {
+        file: target.file,
+        anchor: target.anchor,
+      },
+    }));
   }
 
   function handleTopMessage(event) {
@@ -367,12 +397,23 @@ export default function ReaderScreen({ route }) {
       </View>
 
       <WebView
-        key={bottomUri}
-        ref={bottomWebViewRef}
-        source={{ uri: bottomUri }}
+        ref={ref => {
+          bottomWebViewRefs.current.mishna = ref;
+        }}
+        source={{ uri: bottomUris.mishna }}
         injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
         textZoom={getScalePercent(fontSize, 0.8)}
-        style={styles.pane}
+        style={[styles.pane, bottomTab !== 'mishna' && styles.hiddenPane]}
+        {...webViewProps}
+      />
+      <WebView
+        ref={ref => {
+          bottomWebViewRefs.current.beur = ref;
+        }}
+        source={{ uri: bottomUris.beur }}
+        injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
+        textZoom={getScalePercent(fontSize, 0.8)}
+        style={[styles.pane, bottomTab !== 'beur' && styles.hiddenPane]}
         {...webViewProps}
       />
     </View>
@@ -406,6 +447,9 @@ const styles = StyleSheet.create({
   },
   pane: {
     flex: 1,
+  },
+  hiddenPane: {
+    display: 'none',
   },
   divider: {
     flexDirection: 'row',
