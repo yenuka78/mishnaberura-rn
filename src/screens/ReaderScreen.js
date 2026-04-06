@@ -53,30 +53,38 @@ function buildLinkInterceptor() {
       }
 
       function collectSnippet() {
-        var probeX = Math.max(24, window.innerWidth * 0.5);
-        var probeYs = [0.22, 0.38, 0.54, 0.7].map(function(ratio) {
-          return Math.min(
-            Math.max(60, window.innerHeight * ratio),
-            Math.max(60, window.innerHeight - 40)
-          );
-        });
         var snippets = [];
         var seen = {};
+        var minY = window.innerHeight * 0.18;
+        var maxY = window.innerHeight * 0.82;
+        var walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT,
+          null
+        );
+        var node;
 
-        for (var i = 0; i < probeYs.length; i += 1) {
-          var node = document.elementFromPoint(probeX, probeYs[i]);
+        while ((node = walker.nextNode())) {
+          var raw = normalizeSnippet(node.textContent);
+          if (raw.length < 18) continue;
 
-          while (node && node !== document.body) {
-            var text = normalizeSnippet(node.innerText || node.textContent);
-            if (text.length >= 20) {
-              if (!seen[text]) {
-                snippets.push(text);
-                seen[text] = true;
-              }
-              break;
+          var range = document.createRange();
+          range.selectNodeContents(node);
+          var rects = range.getClientRects();
+
+          for (var i = 0; i < rects.length; i += 1) {
+            var rect = rects[i];
+            if (rect.bottom < minY || rect.top > maxY) continue;
+            if (rect.height <= 0 || rect.width <= 0) continue;
+
+            if (!seen[raw]) {
+              snippets.push(raw);
+              seen[raw] = true;
             }
-            node = node.parentElement;
+            break;
           }
+
+          if (snippets.length >= 4) break;
         }
 
         if (snippets.length > 0) {
