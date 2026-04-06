@@ -108,6 +108,21 @@ function splitSections(html, kind, fallbackTitle) {
   });
 }
 
+function chunkSections(sections, chunkSize) {
+  const chunks = [];
+
+  for (let index = 0; index < sections.length; index += chunkSize) {
+    const group = sections.slice(index, index + chunkSize);
+    const title = group[0]?.title || '';
+    const anchor = group[0]?.anchor || '';
+    const body = group.map(section => section.body).join('\n');
+
+    chunks.push({ title, anchor, body });
+  }
+
+  return chunks;
+}
+
 function previewText(text, max = 220) {
   return text.length <= max ? text : `${text.slice(0, max).trim()}...`;
 }
@@ -129,16 +144,13 @@ async function buildIndex() {
     const baseFile = baseFileFor(file, kind);
     const { mishnaFile, beurFile } = commentaryFilesFor(baseFile);
 
-    const sections = kind === 'main'
-      ? splitSections(html, kind, fallbackTitle)
-      : [{
-        anchor: '',
-        title: fallbackTitle,
-        body: html,
-      }];
+    const sections = splitSections(html, kind, fallbackTitle);
+    const documentsForFile = kind === 'main'
+      ? sections
+      : chunkSections(sections, 8);
 
-    for (let index = 0; index < sections.length; index += 1) {
-      const section = sections[index];
+    for (let index = 0; index < documentsForFile.length; index += 1) {
+      const section = documentsForFile[index];
       const plain = stripHtml(section.body);
       const normalized = normalizeText(`${section.title} ${plain}`);
 
