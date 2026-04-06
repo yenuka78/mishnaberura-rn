@@ -28,8 +28,7 @@ export default function HomeScreen({ navigation }) {
 
   function openSiman(subjectIndex, childIndex) {
     const subject = SUBJECTS[subjectIndex];
-    const simanOffset = childIndex + 1;
-    const anchorIndex = subject.startSiman + simanOffset - 1;
+    const anchorIndex = subject.startSiman + childIndex - 1;
     const params = {
       file: subject.file,
       mishnaFile: subject.mishnaFile,
