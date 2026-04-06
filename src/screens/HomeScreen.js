@@ -5,8 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SUBJECTS, simanAnchor } from '../data';
-
-const LAST_POS_KEY = 'lastPosition';
+import { LAST_POS_KEY } from '../readerState';
 
 export default function HomeScreen({ navigation }) {
   const [expanded, setExpanded] = useState(null);
@@ -29,7 +28,8 @@ export default function HomeScreen({ navigation }) {
 
   function openSiman(subjectIndex, childIndex) {
     const subject = SUBJECTS[subjectIndex];
-    const anchorIndex = subject.startSiman + childIndex - 1;
+    const simanOffset = childIndex + 1;
+    const anchorIndex = subject.startSiman + simanOffset - 1;
     const params = {
       file: subject.file,
       mishnaFile: subject.mishnaFile,
@@ -44,6 +44,12 @@ export default function HomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <TouchableOpacity
+        style={styles.historyButton}
+        onPress={() => navigation.navigate('History')}
+      >
+        <Text style={styles.historyButtonText}>היסטוריה</Text>
+      </TouchableOpacity>
       <SectionList
         sections={sections}
         keyExtractor={(item, index) => item + index}
@@ -90,6 +96,19 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#2a2a4a',
+  },
+  historyButton: {
+    backgroundColor: '#23233a',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a4a',
+  },
+  historyButtonText: {
+    color: '#d4af37',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'right',
   },
   sectionHeaderText: {
     color: '#d4af37',

@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './src/screens/HomeScreen';
 import ReaderScreen from './src/screens/ReaderScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,6 +27,11 @@ export default function App() {
             name="Reader"
             component={ReaderScreen}
             options={({ route }) => ({ title: route.params.simanTitle })}
+          />
+          <Stack.Screen
+            name="History"
+            component={HistoryScreen}
+            options={{ title: 'היסטוריה' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

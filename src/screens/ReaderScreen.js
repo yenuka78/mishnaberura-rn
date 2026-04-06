@@ -1,41 +1,161 @@
-import { useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  FONT_KEY, LAST_POS_KEY, saveRecentPosition,
+} from '../readerState';
 
-const FONT_KEY = 'fontSize';
 const DEFAULT_FONT = 16;
+const MIN_FONT = 10;
+const MAX_FONT = 28;
 
-function buildInjectedJS(fontSize) {
+function buildAssetUri(file, anchor = '') {
+  return `file:///android_asset/${file}${anchor ? `#${anchor}` : ''}`;
+}
+
+function getScalePercent(fontSize, multiplier = 1) {
+  return Math.round((fontSize * multiplier * 100) / DEFAULT_FONT);
+}
+
+function buildScaleInjection(fontSize, multiplier = 1) {
+  const percent = getScalePercent(fontSize, multiplier);
   return `
     (function() {
-      var style = document.createElement('style');
-      style.textContent = 'body { font-size: ${fontSize}px !important; background: #fff; }';
-      document.head.appendChild(style);
+      var id = 'rn-font-scale-style';
+      var style = document.getElementById(id);
+      if (!style) {
+        style = document.createElement('style');
+        style.id = id;
+        document.head.appendChild(style);
+      }
+      style.textContent = 'html { -webkit-text-size-adjust: ${percent}% !important; text-size-adjust: ${percent}% !important; }';
     })();
     true;
   `;
 }
 
+function buildLinkInterceptor() {
+  return `
+    (function() {
+      if (window.__rnLinkInterceptorInstalled) return;
+      window.__rnLinkInterceptorInstalled = true;
+
+      document.addEventListener('click', function(event) {
+        var node = event.target;
+        while (node && node.tagName !== 'A') {
+          node = node.parentElement;
+        }
+        if (!node) return;
+
+        var hrefAttr = node.getAttribute('href') || '';
+        if (!/_sh_(mishna|beur)\\.html/i.test(hrefAttr)) {
+          return;
+        }
+
+        event.preventDefault();
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'commentary-link',
+          href: node.href,
+          rawHref: hrefAttr
+        }));
+      }, true);
+    })();
+    true;
+  `;
+}
+
+function parseCommentaryTarget(href, routeParams) {
+  const parsed = new URL(href);
+  const pathParts = parsed.pathname.split('/');
+  const file = pathParts[pathParts.length - 1] || routeParams.mishnaFile;
+  const anchor = parsed.hash ? parsed.hash.slice(1) : '';
+  const tab = file.includes('_beur') ? 'beur' : 'mishna';
+
+  return { file, anchor, tab };
+}
+
 export default function ReaderScreen({ route }) {
-  const { file, mishnaFile, beurFile, anchor } = route.params;
+  const {
+    file, mishnaFile, beurFile, anchor,
+  } = route.params;
+
+  const topWebViewRef = useRef(null);
+  const bottomWebViewRef = useRef(null);
+
   const [bottomTab, setBottomTab] = useState('mishna');
   const [fontSize, setFontSize] = useState(DEFAULT_FONT);
-
-  AsyncStorage.getItem(FONT_KEY).then(val => {
-    if (val) setFontSize(parseInt(val, 10));
+  const [bottomTarget, setBottomTarget] = useState({
+    file: mishnaFile,
+    anchor: '',
   });
 
-  function changeFont(delta) {
-    const next = Math.max(10, Math.min(28, fontSize + delta));
+  const topUri = useMemo(() => buildAssetUri(file, anchor), [file, anchor]);
+  const bottomUri = useMemo(
+    () => buildAssetUri(bottomTarget.file, bottomTarget.anchor),
+    [bottomTarget]
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    AsyncStorage.getItem(FONT_KEY).then(val => {
+      if (!active || !val) return;
+      const parsed = parseInt(val, 10);
+      if (!Number.isNaN(parsed)) {
+        setFontSize(parsed);
+      }
+    });
+
+    AsyncStorage.setItem(LAST_POS_KEY, JSON.stringify(route.params));
+    saveRecentPosition(AsyncStorage, route.params);
+
+    return () => {
+      active = false;
+    };
+  }, [route.params]);
+
+  useEffect(() => {
+    const topInjection = buildScaleInjection(fontSize);
+    const bottomInjection = buildScaleInjection(fontSize, 0.8);
+
+    topWebViewRef.current?.injectJavaScript(topInjection);
+    bottomWebViewRef.current?.injectJavaScript(bottomInjection);
+  }, [fontSize]);
+
+  useEffect(() => {
+    const nextFile = bottomTab === 'mishna' ? mishnaFile : beurFile;
+    setBottomTarget(current => {
+      if (current.file === nextFile) return current;
+      return { file: nextFile, anchor: '' };
+    });
+  }, [bottomTab, mishnaFile, beurFile]);
+
+  async function changeFont(delta) {
+    const next = Math.max(MIN_FONT, Math.min(MAX_FONT, fontSize + delta));
     setFontSize(next);
-    AsyncStorage.setItem(FONT_KEY, String(next));
+    await AsyncStorage.setItem(FONT_KEY, String(next));
   }
 
-  const topUri = `file:///android_asset/${file}#${anchor}`;
-  const bottomUri = bottomTab === 'mishna'
-    ? `file:///android_asset/${mishnaFile}`
-    : `file:///android_asset/${beurFile}`;
+  function openCommentaryLink(href) {
+    const target = parseCommentaryTarget(href, route.params);
+    setBottomTab(target.tab);
+    setBottomTarget({
+      file: target.file,
+      anchor: target.anchor,
+    });
+  }
+
+  function handleTopMessage(event) {
+    try {
+      const payload = JSON.parse(event.nativeEvent.data);
+      if (payload.type === 'commentary-link' && payload.href) {
+        openCommentaryLink(payload.href);
+      }
+    } catch (error) {
+      // Ignore non-JSON bridge messages from page content.
+    }
+  }
 
   const webViewProps = {
     allowFileAccess: true,
@@ -46,7 +166,6 @@ export default function ReaderScreen({ route }) {
 
   return (
     <View style={styles.container}>
-      {/* Font controls */}
       <View style={styles.fontBar}>
         <TouchableOpacity style={styles.fontBtn} onPress={() => changeFont(-2)}>
           <Text style={styles.fontBtnText}>א-</Text>
@@ -57,16 +176,16 @@ export default function ReaderScreen({ route }) {
         </TouchableOpacity>
       </View>
 
-      {/* Top pane - main text (שו"ע) */}
       <WebView
-        key={topUri}
+        ref={topWebViewRef}
         source={{ uri: topUri }}
-        injectedJavaScript={buildInjectedJS(fontSize)}
+        injectedJavaScript={buildScaleInjection(fontSize)}
+        injectedJavaScriptBeforeContentLoaded={buildLinkInterceptor()}
+        onMessage={handleTopMessage}
         style={styles.pane}
         {...webViewProps}
       />
 
-      {/* Divider with bottom tab toggle */}
       <View style={styles.divider}>
         <TouchableOpacity
           style={[styles.dividerTab, bottomTab === 'mishna' && styles.dividerTabActive]}
@@ -86,11 +205,11 @@ export default function ReaderScreen({ route }) {
         </TouchableOpacity>
       </View>
 
-      {/* Bottom pane - explanation */}
       <WebView
         key={bottomUri}
+        ref={bottomWebViewRef}
         source={{ uri: bottomUri }}
-        injectedJavaScript={buildInjectedJS(Math.round(fontSize * 0.9))}
+        injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
         style={styles.pane}
         {...webViewProps}
       />
