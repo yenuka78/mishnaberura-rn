@@ -6,13 +6,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const FONT_KEY = 'fontSize';
 const DEFAULT_FONT = 16;
 
-const TABS = [
-  { key: 'main', label: 'שו"ע ומ"ב' },
-  { key: 'mishna', label: 'משנה ברורה' },
-  { key: 'beur', label: 'ביאור הלכה' },
-];
-
-// Inject CSS to override font size and add RTL body
 function buildInjectedJS(fontSize) {
   return `
     (function() {
@@ -26,9 +19,8 @@ function buildInjectedJS(fontSize) {
 
 export default function ReaderScreen({ route }) {
   const { file, mishnaFile, beurFile, anchor } = route.params;
-  const [tab, setTab] = useState('main');
+  const [bottomTab, setBottomTab] = useState('mishna');
   const [fontSize, setFontSize] = useState(DEFAULT_FONT);
-  const webViewRef = useRef(null);
 
   AsyncStorage.getItem(FONT_KEY).then(val => {
     if (val) setFontSize(parseInt(val, 10));
@@ -40,37 +32,20 @@ export default function ReaderScreen({ route }) {
     AsyncStorage.setItem(FONT_KEY, String(next));
   }
 
-  function getUri() {
-    const base =
-      tab === 'main' ? file :
-      tab === 'mishna' ? mishnaFile :
-      beurFile;
-    const hash = tab === 'main' ? anchor : anchor.replace('ReportNum', 'Mishna').replace('_L2', '_L2');
-    // Main text uses HtmpReportNum anchor; mishna uses HtmpMishna; beur uses HtmpBeur
-    // For simplicity, navigate to start of file for mishna/beur tabs
-    if (tab === 'main') {
-      return `file:///android_asset/${base}#${anchor}`;
-    }
-    return `file:///android_asset/${base}`;
-  }
+  const topUri = `file:///android_asset/${file}#${anchor}`;
+  const bottomUri = bottomTab === 'mishna'
+    ? `file:///android_asset/${mishnaFile}`
+    : `file:///android_asset/${beurFile}`;
+
+  const webViewProps = {
+    allowFileAccess: true,
+    allowFileAccessFromFileURLs: true,
+    allowUniversalAccessFromFileURLs: true,
+    originWhitelist: ['file://*', 'about:*'],
+  };
 
   return (
     <View style={styles.container}>
-      {/* Tab bar */}
-      <View style={styles.tabBar}>
-        {TABS.map(t => (
-          <TouchableOpacity
-            key={t.key}
-            style={[styles.tab, tab === t.key && styles.activeTab]}
-            onPress={() => setTab(t.key)}
-          >
-            <Text style={[styles.tabText, tab === t.key && styles.activeTabText]}>
-              {t.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {/* Font controls */}
       <View style={styles.fontBar}>
         <TouchableOpacity style={styles.fontBtn} onPress={() => changeFont(-2)}>
@@ -82,17 +57,42 @@ export default function ReaderScreen({ route }) {
         </TouchableOpacity>
       </View>
 
-      {/* WebView */}
+      {/* Top pane - main text (שו"ע) */}
       <WebView
-        ref={webViewRef}
-        key={tab + anchor}
-        source={{ uri: getUri() }}
+        key={topUri}
+        source={{ uri: topUri }}
         injectedJavaScript={buildInjectedJS(fontSize)}
-        allowFileAccess={true}
-        allowFileAccessFromFileURLs={true}
-        allowUniversalAccessFromFileURLs={true}
-        originWhitelist={['file://*', 'about:*']}
-        style={styles.webview}
+        style={styles.pane}
+        {...webViewProps}
+      />
+
+      {/* Divider with bottom tab toggle */}
+      <View style={styles.divider}>
+        <TouchableOpacity
+          style={[styles.dividerTab, bottomTab === 'mishna' && styles.dividerTabActive]}
+          onPress={() => setBottomTab('mishna')}
+        >
+          <Text style={[styles.dividerTabText, bottomTab === 'mishna' && styles.dividerTabTextActive]}>
+            משנה ברורה
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.dividerTab, bottomTab === 'beur' && styles.dividerTabActive]}
+          onPress={() => setBottomTab('beur')}
+        >
+          <Text style={[styles.dividerTabText, bottomTab === 'beur' && styles.dividerTabTextActive]}>
+            ביאור הלכה
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Bottom pane - explanation */}
+      <WebView
+        key={bottomUri}
+        source={{ uri: bottomUri }}
+        injectedJavaScript={buildInjectedJS(Math.round(fontSize * 0.9))}
+        style={styles.pane}
+        {...webViewProps}
       />
     </View>
   );
@@ -102,27 +102,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#1a1a2e',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  activeTab: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#d4af37',
-  },
-  tabText: {
-    color: '#888',
-    fontSize: 13,
-  },
-  activeTabText: {
-    color: '#d4af37',
-    fontWeight: 'bold',
   },
   fontBar: {
     flexDirection: 'row',
@@ -144,7 +123,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
-  webview: {
+  pane: {
     flex: 1,
+  },
+  divider: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1a2e',
+    height: 36,
+  },
+  dividerTab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dividerTabActive: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#d4af37',
+  },
+  dividerTabText: {
+    color: '#888',
+    fontSize: 13,
+  },
+  dividerTabTextActive: {
+    color: '#d4af37',
+    fontWeight: 'bold',
   },
 });
