@@ -1,0 +1,9 @@
+@font-face {
+	font-family: 'Ezra SIL SR';
+	src: url('SILEOTSR.ttf')
+	}
+	
+	
+body{border-width: 1px;border-style:solid;border-color: #e6f1ff; background-color: #ffffff; font-family:Ezra SIL SR; }
+hr{height:2; color:RGB(173,200,234);}
+

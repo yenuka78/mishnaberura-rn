@@ -1,0 +1,14 @@
+<head>	<meta http-equiv=Content-Type content="text/html; charset=windows-1255">	
+
+<link rel="stylesheet" type="text/css" href="font.css">
+</head>
+<html>
+
+<title>משנה ברורה וביאור הלכה על השלחן ערוך - אורח חיים</title>
+<style body-"text/css">body{border-width: 1px;border-style:solid;border-color: #e6f1ff; background-color: silver; }
+hr{height:2; color:RGB(173,200,234);}
+
+</style>
+
+<body lang=EN-US link="#3377cc" vlink="#3377cc" alink="#1464e6" style="tab-interval:36.0pt; " >
+<div class=Section1 dir=LTR > <div class=Section2 dir=RTL >

@@ -1,0 +1,9 @@
+@font-face {
+	font-family: 'SBL Hebrew';
+	src: url('SBL-Hebrew.ttf')
+	}
+	
+body{border-width: 1px;border-style:solid;border-color: #e6f1ff; background-color: #ffffff; font-family:SBL Hebrew; }
+hr{height:2; color:RGB(173,200,234);}
+
+	
