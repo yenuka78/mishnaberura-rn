@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import {
+  AppState, View, TouchableOpacity, Text, StyleSheet,
+} from 'react-native';
 import { WebView } from 'react-native-webview';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  FONT_KEY, LAST_POS_KEY, saveRecentPosition,
+  FONT_KEY, saveLastPosition, saveRecentPosition,
 } from '../readerState';
 
 const DEFAULT_FONT = 16;
@@ -75,6 +77,17 @@ function parseCommentaryTarget(href, routeParams) {
   return { file, anchor, tab };
 }
 
+function buildScrollRestoreInjection(scrollY) {
+  return `
+    (function() {
+      window.requestAnimationFrame(function() {
+        window.scrollTo(0, ${Math.max(0, Math.round(scrollY))});
+      });
+    })();
+    true;
+  `;
+}
+
 export default function ReaderScreen({ route }) {
   const {
     file, mishnaFile, beurFile, anchor,
@@ -82,6 +95,10 @@ export default function ReaderScreen({ route }) {
 
   const topWebViewRef = useRef(null);
   const bottomWebViewRef = useRef(null);
+  const scrollYRef = useRef(route.params.scrollY ?? 0);
+  const initialScrollYRef = useRef(route.params.scrollY ?? 0);
+  const restoreScrollPendingRef = useRef((route.params.scrollY ?? 0) > 0);
+  const lastSavedScrollYRef = useRef(route.params.scrollY ?? 0);
 
   const [bottomTab, setBottomTab] = useState('mishna');
   const [fontSize, setFontSize] = useState(DEFAULT_FONT);
@@ -107,11 +124,44 @@ export default function ReaderScreen({ route }) {
       }
     });
 
-    AsyncStorage.setItem(LAST_POS_KEY, JSON.stringify(route.params));
-    saveRecentPosition(AsyncStorage, route.params);
+    scrollYRef.current = route.params.scrollY ?? 0;
+    initialScrollYRef.current = route.params.scrollY ?? 0;
+    restoreScrollPendingRef.current = (route.params.scrollY ?? 0) > 0;
+    lastSavedScrollYRef.current = route.params.scrollY ?? 0;
 
     return () => {
       active = false;
+    };
+  }, [route.params]);
+
+  useEffect(() => {
+    async function persistCurrentPosition(includeHistory = false) {
+      const entry = {
+        ...route.params,
+        scrollY: Math.max(0, Math.round(scrollYRef.current)),
+      };
+
+      await saveLastPosition(AsyncStorage, entry);
+
+      if (
+        includeHistory &&
+        Math.abs(entry.scrollY - initialScrollYRef.current) > 4 &&
+        Math.abs(entry.scrollY - lastSavedScrollYRef.current) > 4
+      ) {
+        await saveRecentPosition(AsyncStorage, entry);
+        lastSavedScrollYRef.current = entry.scrollY;
+      }
+    }
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState !== 'active') {
+        persistCurrentPosition(true);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      persistCurrentPosition(true);
     };
   }, [route.params]);
 
@@ -164,6 +214,21 @@ export default function ReaderScreen({ route }) {
     originWhitelist: ['file://*', 'about:*'],
   };
 
+  function handleTopScroll(event) {
+    scrollYRef.current = event.nativeEvent.contentOffset.y;
+  }
+
+  function handleTopLoadEnd() {
+    if (!restoreScrollPendingRef.current || scrollYRef.current <= 0) {
+      return;
+    }
+
+    topWebViewRef.current?.injectJavaScript(
+      buildScrollRestoreInjection(scrollYRef.current)
+    );
+    restoreScrollPendingRef.current = false;
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.fontBar}>
@@ -182,6 +247,9 @@ export default function ReaderScreen({ route }) {
         injectedJavaScript={buildScaleInjection(fontSize)}
         injectedJavaScriptBeforeContentLoaded={buildLinkInterceptor()}
         onMessage={handleTopMessage}
+        onScroll={handleTopScroll}
+        onLoadEnd={handleTopLoadEnd}
+        textZoom={getScalePercent(fontSize)}
         style={styles.pane}
         {...webViewProps}
       />
@@ -210,6 +278,7 @@ export default function ReaderScreen({ route }) {
         ref={bottomWebViewRef}
         source={{ uri: bottomUri }}
         injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
+        textZoom={getScalePercent(fontSize, 0.8)}
         style={styles.pane}
         {...webViewProps}
       />
