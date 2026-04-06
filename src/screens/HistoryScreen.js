@@ -51,7 +51,7 @@ export default function HistoryScreen({ navigation }) {
           <TouchableOpacity style={styles.item} onPress={() => openEntry(item)}>
             <Text style={styles.itemTitle}>{item.simanTitle}</Text>
             <Text style={styles.itemSubtitle}>
-              {`${item.file} • offset ${Math.round(item.scrollY || 0)}`}
+              {`${item.file} • ${Math.round((item.scrollRatio || 0) * 100)}%`}
             </Text>
           </TouchableOpacity>
         )}

@@ -88,6 +88,32 @@ function buildScrollRestoreInjection(scrollY) {
   `;
 }
 
+function buildRelativeScrollRestoreInjection(scrollRatio) {
+  const normalizedRatio = Math.max(0, Math.min(1, scrollRatio));
+  return `
+    (function() {
+      function restore() {
+        var root = document.documentElement;
+        var body = document.body;
+        var docHeight = Math.max(
+          root ? root.scrollHeight : 0,
+          body ? body.scrollHeight : 0
+        );
+        var viewport = window.innerHeight || 0;
+        var maxScroll = Math.max(0, docHeight - viewport);
+        window.scrollTo(0, maxScroll * ${normalizedRatio});
+      }
+
+      window.requestAnimationFrame(function() {
+        restore();
+        setTimeout(restore, 80);
+        setTimeout(restore, 200);
+      });
+    })();
+    true;
+  `;
+}
+
 export default function ReaderScreen({ route }) {
   const {
     file, mishnaFile, beurFile, anchor,
@@ -96,6 +122,7 @@ export default function ReaderScreen({ route }) {
   const topWebViewRef = useRef(null);
   const bottomWebViewRef = useRef(null);
   const scrollYRef = useRef(route.params.scrollY ?? 0);
+  const scrollRatioRef = useRef(route.params.scrollRatio ?? 0);
   const initialScrollYRef = useRef(route.params.scrollY ?? 0);
   const restoreScrollPendingRef = useRef((route.params.scrollY ?? 0) > 0);
   const lastSavedScrollYRef = useRef(route.params.scrollY ?? 0);
@@ -125,6 +152,7 @@ export default function ReaderScreen({ route }) {
     });
 
     scrollYRef.current = route.params.scrollY ?? 0;
+    scrollRatioRef.current = route.params.scrollRatio ?? 0;
     initialScrollYRef.current = route.params.scrollY ?? 0;
     restoreScrollPendingRef.current = (route.params.scrollY ?? 0) > 0;
     lastSavedScrollYRef.current = route.params.scrollY ?? 0;
@@ -144,6 +172,7 @@ export default function ReaderScreen({ route }) {
       const entry = {
         ...route.params,
         scrollY: Math.max(0, Math.round(scrollYRef.current)),
+        scrollRatio: Math.max(0, Math.min(1, scrollRatioRef.current || 0)),
       };
 
       await saveLastPosition(AsyncStorage, entry);
@@ -220,7 +249,14 @@ export default function ReaderScreen({ route }) {
   };
 
   function handleTopScroll(event) {
-    scrollYRef.current = event.nativeEvent.contentOffset.y;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const y = contentOffset?.y ?? 0;
+    const totalHeight = contentSize?.height ?? 0;
+    const viewportHeight = layoutMeasurement?.height ?? 0;
+    const maxScroll = Math.max(0, totalHeight - viewportHeight);
+
+    scrollYRef.current = y;
+    scrollRatioRef.current = maxScroll > 0 ? y / maxScroll : 0;
   }
 
   function handleTopLoadEnd() {
@@ -229,7 +265,9 @@ export default function ReaderScreen({ route }) {
     }
 
     topWebViewRef.current?.injectJavaScript(
-      buildScrollRestoreInjection(scrollYRef.current)
+      route.params.scrollRatio > 0
+        ? buildRelativeScrollRestoreInjection(route.params.scrollRatio)
+        : buildScrollRestoreInjection(scrollYRef.current)
     );
     restoreScrollPendingRef.current = false;
   }
