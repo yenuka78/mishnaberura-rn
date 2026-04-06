@@ -41,14 +41,18 @@ export default function HistoryScreen({ navigation }) {
       </TouchableOpacity>
       <FlatList
         data={entries}
-        keyExtractor={item => `${item.file}:${item.anchor}`}
+        keyExtractor={item =>
+          `${item.file}:${item.anchor || ''}:${item.scrollY || 0}:${item.savedAt || 0}`
+        }
         ListEmptyComponent={
           <Text style={styles.emptyText}>אין היסטוריה שמורה עדיין</Text>
         }
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.item} onPress={() => openEntry(item)}>
             <Text style={styles.itemTitle}>{item.simanTitle}</Text>
-            <Text style={styles.itemSubtitle}>{item.file}</Text>
+            <Text style={styles.itemSubtitle}>
+              {`${item.file} • offset ${Math.round(item.scrollY || 0)}`}
+            </Text>
           </TouchableOpacity>
         )}
       />
