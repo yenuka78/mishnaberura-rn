@@ -100,11 +100,11 @@ export default function ReaderScreen({ route }) {
   const restoreScrollPendingRef = useRef((route.params.scrollY ?? 0) > 0);
   const lastSavedScrollYRef = useRef(route.params.scrollY ?? 0);
 
-  const [bottomTab, setBottomTab] = useState('mishna');
+  const [bottomTab, setBottomTab] = useState(route.params.bottomTab ?? 'mishna');
   const [fontSize, setFontSize] = useState(DEFAULT_FONT);
   const [bottomTarget, setBottomTarget] = useState({
-    file: mishnaFile,
-    anchor: '',
+    file: route.params.bottomFile ?? mishnaFile,
+    anchor: route.params.bottomAnchor ?? '',
   });
 
   const topUri = useMemo(() => buildAssetUri(file, anchor), [file, anchor]);
@@ -128,11 +128,16 @@ export default function ReaderScreen({ route }) {
     initialScrollYRef.current = route.params.scrollY ?? 0;
     restoreScrollPendingRef.current = (route.params.scrollY ?? 0) > 0;
     lastSavedScrollYRef.current = route.params.scrollY ?? 0;
+    setBottomTab(route.params.bottomTab ?? 'mishna');
+    setBottomTarget({
+      file: route.params.bottomFile ?? mishnaFile,
+      anchor: route.params.bottomAnchor ?? '',
+    });
 
     return () => {
       active = false;
     };
-  }, [route.params]);
+  }, [route.params, mishnaFile]);
 
   useEffect(() => {
     async function persistCurrentPosition(includeHistory = false) {

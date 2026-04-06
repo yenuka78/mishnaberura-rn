@@ -44,12 +44,20 @@ export default function HomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
-      <TouchableOpacity
-        style={styles.historyButton}
-        onPress={() => navigation.navigate('History')}
-      >
-        <Text style={styles.historyButtonText}>היסטוריה</Text>
-      </TouchableOpacity>
+      <View style={styles.toolbar}>
+        <TouchableOpacity
+          style={styles.toolbarButton}
+          onPress={() => navigation.navigate('Search')}
+        >
+          <Text style={styles.toolbarButtonText}>חיפוש</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.toolbarButton}
+          onPress={() => navigation.navigate('History')}
+        >
+          <Text style={styles.toolbarButtonText}>היסטוריה</Text>
+        </TouchableOpacity>
+      </View>
       <SectionList
         sections={sections}
         keyExtractor={(item, index) => item + index}
@@ -97,18 +105,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2a2a4a',
   },
-  historyButton: {
-    backgroundColor: '#23233a',
-    paddingHorizontal: 16,
+  toolbar: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 12,
     paddingVertical: 12,
+    backgroundColor: '#171728',
     borderBottomWidth: 1,
     borderBottomColor: '#2a2a4a',
   },
-  historyButtonText: {
+  toolbarButton: {
+    flex: 1,
+    backgroundColor: '#23233a',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#34345a',
+  },
+  toolbarButtonText: {
     color: '#d4af37',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
-    textAlign: 'right',
+    textAlign: 'center',
   },
   sectionHeaderText: {
     color: '#d4af37',
