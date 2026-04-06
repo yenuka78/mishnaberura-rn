@@ -9,7 +9,7 @@ echo "Running expo prebuild (generates android/ directory)..."
 npx expo prebuild --platform android --clean
 
 echo "Copying HTML assets..."
-ASSETS_SRC="../mishnaberura/assets"
+ASSETS_SRC="./assets"
 ASSETS_DST="android/app/src/main/assets"
 mkdir -p "$ASSETS_DST"
 cp "$ASSETS_SRC"/*.html "$ASSETS_DST/"
