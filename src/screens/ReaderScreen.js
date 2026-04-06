@@ -42,6 +42,46 @@ function buildLinkInterceptor() {
     (function() {
       if (window.__rnLinkInterceptorInstalled) return;
       window.__rnLinkInterceptorInstalled = true;
+      var lastSnippet = '';
+      var snippetTimer = null;
+
+      function normalizeSnippet(text) {
+        return (text || '')
+          .replace(/\\s+/g, ' ')
+          .trim()
+          .slice(0, 180);
+      }
+
+      function collectSnippet() {
+        var probeY = Math.min(Math.max(80, window.innerHeight * 0.25), 180);
+        var probeX = Math.max(24, window.innerWidth * 0.5);
+        var node = document.elementFromPoint(probeX, probeY);
+
+        while (node && node !== document.body) {
+          var text = normalizeSnippet(node.innerText || node.textContent);
+          if (text.length >= 20) {
+            return text;
+          }
+          node = node.parentElement;
+        }
+
+        return normalizeSnippet(document.body && document.body.innerText);
+      }
+
+      function sendViewportContext() {
+        var snippet = collectSnippet();
+        if (!snippet || snippet === lastSnippet) return;
+        lastSnippet = snippet;
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'viewport-context',
+          snippet: snippet
+        }));
+      }
+
+      function scheduleViewportContext() {
+        if (snippetTimer) clearTimeout(snippetTimer);
+        snippetTimer = setTimeout(sendViewportContext, 120);
+      }
 
       document.addEventListener('click', function(event) {
         var node = event.target;
@@ -62,6 +102,11 @@ function buildLinkInterceptor() {
           rawHref: hrefAttr
         }));
       }, true);
+
+      window.addEventListener('scroll', scheduleViewportContext, { passive: true });
+      window.addEventListener('load', scheduleViewportContext);
+      window.addEventListener('resize', scheduleViewportContext);
+      setTimeout(sendViewportContext, 150);
     })();
     true;
   `;
@@ -123,6 +168,7 @@ export default function ReaderScreen({ route }) {
   const bottomWebViewRef = useRef(null);
   const scrollYRef = useRef(route.params.scrollY ?? 0);
   const scrollRatioRef = useRef(route.params.scrollRatio ?? 0);
+  const historySnippetRef = useRef(route.params.historySnippet ?? route.params.simanTitle);
   const initialScrollYRef = useRef(route.params.scrollY ?? 0);
   const restoreScrollPendingRef = useRef((route.params.scrollY ?? 0) > 0);
   const lastSavedScrollYRef = useRef(route.params.scrollY ?? 0);
@@ -153,6 +199,7 @@ export default function ReaderScreen({ route }) {
 
     scrollYRef.current = route.params.scrollY ?? 0;
     scrollRatioRef.current = route.params.scrollRatio ?? 0;
+    historySnippetRef.current = route.params.historySnippet ?? route.params.simanTitle;
     initialScrollYRef.current = route.params.scrollY ?? 0;
     restoreScrollPendingRef.current = (route.params.scrollY ?? 0) > 0;
     lastSavedScrollYRef.current = route.params.scrollY ?? 0;
@@ -173,6 +220,7 @@ export default function ReaderScreen({ route }) {
         ...route.params,
         scrollY: Math.max(0, Math.round(scrollYRef.current)),
         scrollRatio: Math.max(0, Math.min(1, scrollRatioRef.current || 0)),
+        historySnippet: historySnippetRef.current || route.params.simanTitle,
       };
 
       await saveLastPosition(AsyncStorage, entry);
@@ -235,6 +283,8 @@ export default function ReaderScreen({ route }) {
       const payload = JSON.parse(event.nativeEvent.data);
       if (payload.type === 'commentary-link' && payload.href) {
         openCommentaryLink(payload.href);
+      } else if (payload.type === 'viewport-context' && payload.snippet) {
+        historySnippetRef.current = payload.snippet;
       }
     } catch (error) {
       // Ignore non-JSON bridge messages from page content.

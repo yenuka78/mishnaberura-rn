@@ -9,17 +9,20 @@ import { RECENT_POSITIONS_KEY, LAST_POS_KEY } from '../readerState';
 export default function HistoryScreen({ navigation }) {
   const [entries, setEntries] = useState([]);
 
+  function loadEntries() {
+    AsyncStorage.getItem(RECENT_POSITIONS_KEY).then(value => {
+      const parsed = value ? JSON.parse(value) : [];
+      setEntries(parsed);
+    });
+  }
+
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-
-      AsyncStorage.getItem(RECENT_POSITIONS_KEY).then(value => {
-        if (!active) return;
-        setEntries(value ? JSON.parse(value) : []);
-      });
+      loadEntries();
+      const delayedReload = setTimeout(loadEntries, 350);
 
       return () => {
-        active = false;
+        clearTimeout(delayedReload);
       };
     }, [])
   );
@@ -52,6 +55,9 @@ export default function HistoryScreen({ navigation }) {
             <Text style={styles.itemTitle}>{item.simanTitle}</Text>
             <Text style={styles.itemSubtitle}>
               {`${item.file} • ${Math.round((item.scrollRatio || 0) * 100)}%`}
+            </Text>
+            <Text numberOfLines={3} style={styles.itemSnippet}>
+              {item.historySnippet || 'ללא תצוגה מקדימה'}
             </Text>
           </TouchableOpacity>
         )}
@@ -100,6 +106,13 @@ const styles = StyleSheet.create({
     color: '#8e8ea8',
     fontSize: 12,
     marginTop: 4,
+    textAlign: 'right',
+  },
+  itemSnippet: {
+    color: '#b9b9cd',
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 6,
     textAlign: 'right',
   },
 });
