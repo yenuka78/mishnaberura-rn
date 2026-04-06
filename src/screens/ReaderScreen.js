@@ -53,16 +53,34 @@ function buildLinkInterceptor() {
       }
 
       function collectSnippet() {
-        var probeY = Math.min(Math.max(80, window.innerHeight * 0.25), 180);
         var probeX = Math.max(24, window.innerWidth * 0.5);
-        var node = document.elementFromPoint(probeX, probeY);
+        var probeYs = [0.22, 0.38, 0.54, 0.7].map(function(ratio) {
+          return Math.min(
+            Math.max(60, window.innerHeight * ratio),
+            Math.max(60, window.innerHeight - 40)
+          );
+        });
+        var snippets = [];
+        var seen = {};
 
-        while (node && node !== document.body) {
-          var text = normalizeSnippet(node.innerText || node.textContent);
-          if (text.length >= 20) {
-            return text;
+        for (var i = 0; i < probeYs.length; i += 1) {
+          var node = document.elementFromPoint(probeX, probeYs[i]);
+
+          while (node && node !== document.body) {
+            var text = normalizeSnippet(node.innerText || node.textContent);
+            if (text.length >= 20) {
+              if (!seen[text]) {
+                snippets.push(text);
+                seen[text] = true;
+              }
+              break;
+            }
+            node = node.parentElement;
           }
-          node = node.parentElement;
+        }
+
+        if (snippets.length > 0) {
+          return normalizeSnippet(snippets.join(' | '));
         }
 
         return normalizeSnippet(document.body && document.body.innerText);
@@ -396,26 +414,30 @@ export default function ReaderScreen({ route }) {
         </TouchableOpacity>
       </View>
 
-      <WebView
-        ref={ref => {
-          bottomWebViewRefs.current.mishna = ref;
-        }}
-        source={{ uri: bottomUris.mishna }}
-        injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
-        textZoom={getScalePercent(fontSize, 0.8)}
-        style={[styles.pane, bottomTab !== 'mishna' && styles.hiddenPane]}
-        {...webViewProps}
-      />
-      <WebView
-        ref={ref => {
-          bottomWebViewRefs.current.beur = ref;
-        }}
-        source={{ uri: bottomUris.beur }}
-        injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
-        textZoom={getScalePercent(fontSize, 0.8)}
-        style={[styles.pane, bottomTab !== 'beur' && styles.hiddenPane]}
-        {...webViewProps}
-      />
+      <View style={styles.bottomPaneStack}>
+        <WebView
+          ref={ref => {
+            bottomWebViewRefs.current.mishna = ref;
+          }}
+          source={{ uri: bottomUris.mishna }}
+          injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
+          textZoom={getScalePercent(fontSize, 0.8)}
+          style={[styles.bottomPaneWebView, bottomTab !== 'mishna' && styles.inactiveBottomPane]}
+          pointerEvents={bottomTab === 'mishna' ? 'auto' : 'none'}
+          {...webViewProps}
+        />
+        <WebView
+          ref={ref => {
+            bottomWebViewRefs.current.beur = ref;
+          }}
+          source={{ uri: bottomUris.beur }}
+          injectedJavaScript={buildScaleInjection(fontSize, 0.8)}
+          textZoom={getScalePercent(fontSize, 0.8)}
+          style={[styles.bottomPaneWebView, bottomTab !== 'beur' && styles.inactiveBottomPane]}
+          pointerEvents={bottomTab === 'beur' ? 'auto' : 'none'}
+          {...webViewProps}
+        />
+      </View>
     </View>
   );
 }
@@ -448,8 +470,16 @@ const styles = StyleSheet.create({
   pane: {
     flex: 1,
   },
-  hiddenPane: {
-    display: 'none',
+  bottomPaneStack: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#fff',
+  },
+  bottomPaneWebView: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  inactiveBottomPane: {
+    opacity: 0,
   },
   divider: {
     flexDirection: 'row',
