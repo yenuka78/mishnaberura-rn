@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react';
 import MiniSearch from 'minisearch';
 import {
   View, Text, TextInput, FlatList, TouchableOpacity, StyleSheet,
@@ -20,6 +20,18 @@ const MINI_SEARCH_OPTIONS = {
     'preview',
   ],
 };
+
+const RESULT_ROW_HEIGHT = 148;
+
+const SearchResultRow = memo(function SearchResultRow({ item, onPress }) {
+  return (
+    <TouchableOpacity style={styles.item} onPress={() => onPress(item)}>
+      <Text style={styles.itemMeta}>{item.label}</Text>
+      <Text style={styles.itemTitle}>{item.title}</Text>
+      <Text numberOfLines={4} style={styles.itemPreview}>{item.preview}</Text>
+    </TouchableOpacity>
+  );
+});
 
 export default function SearchScreen({ navigation }) {
   const [query, setQuery] = useState('');
@@ -43,7 +55,7 @@ export default function SearchScreen({ navigation }) {
     }).slice(0, 100);
   }, [deferredQuery, miniSearch]);
 
-  function openResult(entry) {
+  const openResult = useCallback(entry => {
     const params = {
       file: entry.baseFile,
       mishnaFile: entry.mishnaFile,
@@ -60,7 +72,23 @@ export default function SearchScreen({ navigation }) {
     }
 
     navigation.navigate('Reader', params);
-  }
+  }, [navigation]);
+
+  const renderItem = useCallback(
+    ({ item }) => <SearchResultRow item={item} onPress={openResult} />,
+    [openResult]
+  );
+
+  const keyExtractor = useCallback(item => item.id, []);
+
+  const getItemLayout = useCallback(
+    (_, index) => ({
+      length: RESULT_ROW_HEIGHT,
+      offset: RESULT_ROW_HEIGHT * index,
+      index,
+    }),
+    []
+  );
 
   return (
     <View style={styles.container}>
@@ -81,15 +109,15 @@ export default function SearchScreen({ navigation }) {
       )}
       <FlatList
         data={results}
-        keyExtractor={item => item.id}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        getItemLayout={getItemLayout}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={60}
+        windowSize={7}
+        removeClippedSubviews
         keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.item} onPress={() => openResult(item)}>
-            <Text style={styles.itemMeta}>{item.label}</Text>
-            <Text style={styles.itemTitle}>{item.title}</Text>
-            <Text style={styles.itemPreview}>{item.preview}</Text>
-          </TouchableOpacity>
-        )}
       />
     </View>
   );
@@ -129,6 +157,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#1f1f34',
+    minHeight: RESULT_ROW_HEIGHT - 12,
   },
   itemMeta: {
     color: '#d4af37',

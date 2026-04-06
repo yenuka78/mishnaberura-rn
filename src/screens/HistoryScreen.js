@@ -1,10 +1,26 @@
-import { useCallback, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { RECENT_POSITIONS_KEY, LAST_POS_KEY } from '../readerState';
+
+const HISTORY_ROW_HEIGHT = 122;
+
+const HistoryRow = memo(function HistoryRow({ item, onPress }) {
+  return (
+    <TouchableOpacity style={styles.item} onPress={() => onPress(item)}>
+      <Text style={styles.itemTitle}>{item.simanTitle}</Text>
+      <Text style={styles.itemSubtitle}>
+        {`${item.file} • ${Math.round((item.scrollRatio || 0) * 100)}%`}
+      </Text>
+      <Text numberOfLines={3} style={styles.itemSnippet}>
+        {item.historySnippet || 'ללא תצוגה מקדימה'}
+      </Text>
+    </TouchableOpacity>
+  );
+});
 
 export default function HistoryScreen({ navigation }) {
   const [entries, setEntries] = useState([]);
@@ -27,15 +43,34 @@ export default function HistoryScreen({ navigation }) {
     }, [])
   );
 
-  async function openEntry(item) {
+  const openEntry = useCallback(async item => {
     await AsyncStorage.setItem(LAST_POS_KEY, JSON.stringify(item));
     navigation.navigate('Reader', item);
-  }
+  }, [navigation]);
 
-  async function clearHistory() {
+  const clearHistory = useCallback(async () => {
     await AsyncStorage.removeItem(RECENT_POSITIONS_KEY);
     setEntries([]);
-  }
+  }, []);
+
+  const keyExtractor = useCallback(
+    item => `${item.file}:${item.anchor || ''}:${item.scrollY || 0}:${item.savedAt || 0}`,
+    []
+  );
+
+  const renderItem = useCallback(
+    ({ item }) => <HistoryRow item={item} onPress={openEntry} />,
+    [openEntry]
+  );
+
+  const getItemLayout = useCallback(
+    (_, index) => ({
+      length: HISTORY_ROW_HEIGHT,
+      offset: HISTORY_ROW_HEIGHT * index,
+      index,
+    }),
+    []
+  );
 
   return (
     <View style={styles.container}>
@@ -44,23 +79,17 @@ export default function HistoryScreen({ navigation }) {
       </TouchableOpacity>
       <FlatList
         data={entries}
-        keyExtractor={item =>
-          `${item.file}:${item.anchor || ''}:${item.scrollY || 0}:${item.savedAt || 0}`
-        }
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        getItemLayout={getItemLayout}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={60}
+        windowSize={7}
+        removeClippedSubviews
         ListEmptyComponent={
           <Text style={styles.emptyText}>אין היסטוריה שמורה עדיין</Text>
         }
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.item} onPress={() => openEntry(item)}>
-            <Text style={styles.itemTitle}>{item.simanTitle}</Text>
-            <Text style={styles.itemSubtitle}>
-              {`${item.file} • ${Math.round((item.scrollRatio || 0) * 100)}%`}
-            </Text>
-            <Text numberOfLines={3} style={styles.itemSnippet}>
-              {item.historySnippet || 'ללא תצוגה מקדימה'}
-            </Text>
-          </TouchableOpacity>
-        )}
       />
     </View>
   );
@@ -96,6 +125,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1e1e3a',
     backgroundColor: '#151525',
+    minHeight: HISTORY_ROW_HEIGHT,
   },
   itemTitle: {
     color: '#e6e6f2',
